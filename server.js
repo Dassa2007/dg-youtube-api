@@ -12,27 +12,22 @@ app.get('/api/youtube', async (req, res) => {
     }
 
     try {
-        // Using public robust cobalt API engine to bypass restrictions
-        const response = await axios.post('https://api.cobalt.tools/api/json', {
-            url: ytUrl,
-            vQuality: '720'
-        }, {
+        // Using a stable alternative public API provider for YouTube
+        const response = await axios.get(`https://apis.davidcyriltech.my.id/youtube?url=${encodeURIComponent(ytUrl)}`, {
             headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
             }
         });
 
-        if (response.data && (response.data.status === 'stream' || response.data.status === 'redirect' || response.data.url)) {
-            const downloadUrl = response.data.url || response.data.picker[0].url;
+        if (response.data && response.data.status === 200 && response.data.result) {
+            const videoData = response.data.result;
             return res.json({
                 status: true,
                 result: {
-                    title: "YouTube Video",
-                    thumbnail: "https://i.imgur.com/35m47g3.png",
+                    title: videoData.title || "YouTube Video",
+                    thumbnail: videoData.thumbnail || "https://i.imgur.com/35m47g3.png",
                     formats: [
-                        { quality: "HD / Standard", container: "mp4", url: downloadUrl }
+                        { quality: "HD / Standard Quality", container: "mp4", url: videoData.download_url || videoData.video || videoData.url }
                     ]
                 }
             });
