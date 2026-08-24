@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const ytdl = require('@distube/ytdl-core');
 
 const app = express();
 app.use(cors());
@@ -18,38 +19,32 @@ app.get('/download', async (req, res) => {
         return res.status(400).json({ success: false, error: "Please provide a YouTube URL!" });
     }
 
+    if (!ytdl.validateURL(videoUrl)) {
+        return res.status(400).json({ success: false, error: "Invalid YouTube URL!" });
+    }
+
     try {
-        const fetch = (await import('node-fetch')).default;
+        const info = await ytdl.getInfo(videoUrl);
         
-        // Using stable Cobalt API instance
-        const response = await fetch('https://api.cobalt.tools/api/json', {
-            method: 'POST',
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'User-Agent': 'Mozilla/5.0'
-            },
-            body: JSON.stringify({
-                url: videoUrl,
-                vQuality: '720',
-                filenamePattern: 'classic'
-            })
-        });
+        // උසස්ම තත්ත්වයේ (Audio + Video) ෆෝමැට් එක තෝරාගැනීම
+        let format = ytdl.chooseFormat(info.formats, { quality: 'highestvideo', filter: 'audioandvideo' });
+        
+        if (!format) {
+            format = ytdl.chooseFormat(info.formats, { quality: 'highest' });
+        }
 
-        const data = await response.json();
-
-        if (data && (data.url || data.picker)) {
-            const downloadUrl = data.url || data.picker[0].url;
+        if (format && format.url) {
             return res.json({
                 success: true,
-                download_url: downloadUrl
+                download_url: format.url
             });
         } else {
-            return res.status(400).json({ success: false, error: "Could not fetch video. Try another link!" });
+            return res.status(400).json({ success: false, error: "Could not find a suitable video format." });
         }
 
     } catch (err) {
-        return res.status(500).json({ success: false, error: "Server error occurred. Please try again." });
+        console.error(err);
+        return res.status(500).json({ success: false, error: "Server error or YouTube blocked the request." });
     }
 });
 
