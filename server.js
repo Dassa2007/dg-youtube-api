@@ -1,5 +1,5 @@
 const express = require('express');
-const ytdl = require('ytdl-core');
+const axios = require('axios');
 const cors = require('cors');
 
 const app = express();
@@ -12,49 +12,57 @@ app.get('/api/youtube', async (req, res) => {
     }
 
     try {
-        if (!ytdl.validateURL(ytUrl)) {
-            return res.status(400).json({ status: false, error: "Invalid YouTube URL!" });
-        }
-
-        const info = await ytdl.getInfo(ytUrl);
-        const title = info.videoDetails.title;
-        const thumbnail = info.videoDetails.thumbnails[info.videoDetails.thumbnails.length - 1].url;
-        
-        // Filtering formats that have both video and audio or just video/audio
-        const formats = info.formats
-            .filter(format => format.hasVideo && format.hasAudio)
-            .map(format => ({
-                quality: format.qualityLabel,
-                container: format.container,
-                url: format.url
-            }));
-
-        // Fallback or specific formats if needed
-        return res.json({
-            status: true,
-            result: {
-                title: title,
-                thumbnail: thumbnail,
-                formats: formats
+        // Using public robust cobalt API engine to bypass restrictions
+        const response = await axios.post('https://api.cobalt.tools/api/json', {
+            url: ytUrl,
+            vQuality: '720'
+        }, {
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
             }
         });
 
+        if (response.data && (response.data.status === 'stream' || response.data.status === 'redirect' || response.data.url)) {
+            const downloadUrl = response.data.url || response.data.picker[0].url;
+            return res.json({
+                status: true,
+                result: {
+                    title: "YouTube Video",
+                    thumbnail: "https://i.imgur.com/35m47g3.png",
+                    formats: [
+                        { quality: "HD / Standard", container: "mp4", url: downloadUrl }
+                    ]
+                }
+            });
+        } else {
+            return res.status(404).json({ status: false, error: "Could not fetch YouTube video. Try another link!" });
+        }
+
     } catch (error) {
-        return res.status(500).json({ status: false, error: "Failed to fetch YouTube video info. YouTube might be blocking requests from cloud servers." });
+        return res.status(500).json({ status: false, error: "Failed to process YouTube link. Server is waking up, try again in 10 seconds." });
     }
 });
 
-// Download Proxy to stream and force file download
+// Download Proxy
 app.get('/api/download', async (req, res) => {
-    const videoUrl = req.query.url;
-    const title = req.query.title || 'video';
-    if (!videoUrl) return res.status(400).send("Missing URL");
+    const fileUrl = req.query.url;
+    if (!fileUrl) return res.status(400).send("Missing URL");
 
     try {
-        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(title)}.mp4"`);
+        const response = await axios({
+            method: 'get',
+            url: fileUrl,
+            responseType: 'stream',
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+            }
+        });
+
+        res.setHeader('Content-Disposition', 'attachment; filename="YouTube-Video.mp4"');
         res.setHeader('Content-Type', 'video/mp4');
-        
-        ytdl(videoUrl, { quality: 'highest' }).pipe(res);
+        response.data.pipe(res);
     } catch (error) {
         res.status(500).send("Download failed.");
     }
