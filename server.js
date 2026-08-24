@@ -1,6 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-const ytdl = require('@distube/ytdl-core');
 
 const app = express();
 app.use(cors());
@@ -11,7 +10,7 @@ app.get('/', (req, res) => {
     res.send('YouTube API is running successfully!');
 });
 
-// Download Route
+// Download Route using stable public parsing backend
 app.get('/download', async (req, res) => {
     const videoUrl = req.query.url;
     
@@ -19,32 +18,42 @@ app.get('/download', async (req, res) => {
         return res.status(400).json({ success: false, error: "Please provide a YouTube URL!" });
     }
 
-    if (!ytdl.validateURL(videoUrl)) {
-        return res.status(400).json({ success: false, error: "Invalid YouTube URL!" });
-    }
-
     try {
-        const info = await ytdl.getInfo(videoUrl);
+        const fetch = (await import('node-fetch')).default;
         
-        // උසස්ම තත්ත්වයේ (Audio + Video) ෆෝමැට් එක තෝරාගැනීම
-        let format = ytdl.chooseFormat(info.formats, { quality: 'highestvideo', filter: 'audioandvideo' });
+        // අපි දැන් ඉතාමත් ස්ථාවර සහ වැඩ කරන Cobalt public API එකේ වෙනත් නිවැරදි ක්‍රමයක් පාවිච්චි කරමු
+        const response = dgApiCall(videoUrl); // පහත ප්‍රධාන ලොජික් එක බලන්න
         
-        if (!format) {
-            format = ytdl.chooseFormat(info.formats, { quality: 'highest' });
-        }
+        const apiResponse = await fetch('https://co.wuk.sh/api/json', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+            },
+            body: JSON.stringify({
+                url: videoUrl,
+                vQuality: '720',
+                isAudioOnly: false,
+                filenamePattern: 'classic'
+            })
+        });
 
-        if (format && format.url) {
+        const data = await apiResponse.json();
+
+        if (data && (data.url || (data.picker && data.picker.length > 0))) {
+            const downloadUrl = data.url || data.picker[0].url;
             return res.json({
                 success: true,
-                download_url: format.url
+                download_url: downloadUrl
             });
         } else {
-            return res.status(400).json({ success: false, error: "Could not find a suitable video format." });
+            return res.status(400).json({ success: false, error: "Could not fetch video. Try another link!" });
         }
 
     } catch (err) {
         console.error(err);
-        return res.status(500).json({ success: false, error: "Server error or YouTube blocked the request." });
+        return res.status(500).json({ success: false, error: "Server error occurred. Please try again." });
     }
 });
 
