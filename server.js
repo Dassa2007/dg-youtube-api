@@ -10,7 +10,7 @@ app.get('/', (req, res) => {
     res.send('YouTube API is running successfully!');
 });
 
-// Download Route using stable public parsing backend
+// Download Route
 app.get('/download', async (req, res) => {
     const videoUrl = req.query.url;
     
@@ -21,10 +21,7 @@ app.get('/download', async (req, res) => {
     try {
         const fetch = (await import('node-fetch')).default;
         
-        // අපි දැන් ඉතාමත් ස්ථාවර සහ වැඩ කරන Cobalt public API එකේ වෙනත් නිවැරදි ක්‍රමයක් පාවිච්චි කරමු
-        const response = dgApiCall(videoUrl); // පහත ප්‍රධාන ලොජික් එක බලන්න
-        
-        const apiResponse = await fetch('https://co.wuk.sh/api/json', {
+        const response = await fetch('https://api.cobalt.tools/api/json', {
             method: 'POST',
             headers: {
                 'Accept': 'application/json',
@@ -34,14 +31,13 @@ app.get('/download', async (req, res) => {
             body: JSON.stringify({
                 url: videoUrl,
                 vQuality: '720',
-                isAudioOnly: false,
                 filenamePattern: 'classic'
             })
         });
 
-        const data = await apiResponse.json();
+        const data = await response.json();
 
-        if (data && (data.url || (data.picker && data.picker.length > 0))) {
+        if (data && (data.url || data.picker)) {
             const downloadUrl = data.url || data.picker[0].url;
             return res.json({
                 success: true,
