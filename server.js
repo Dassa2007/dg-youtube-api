@@ -1,43 +1,59 @@
 const express = require('express');
-const axios = require('axios');
 const cors = require('cors');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get('/api/youtube', async (req, res) => {
-    let ytUrl = req.query.url;
-    if (!ytUrl) {
-        return res.status(400).json({ status: false, error: "Please provide a YouTube URL!" });
+// Test Route
+app.get('/', (req, res) => {
+    res.send('YouTube API is running successfully!');
+});
+
+// Download Route
+app.get('/download', async (req, res) => {
+    const videoUrl = req.query.url;
+    
+    if (!videoUrl) {
+        return res.status(400).json({ success: false, error: "Please provide a YouTube URL!" });
     }
 
     try {
-        // Using stable Cobalt public routing engine
-        const response = await axios.post('https://co.wuk.sh/api/json', {
-            url: ytUrl,
-            vQuality: '720'
-        }, {
+        const fetch = (await import('node-fetch')).default;
+        
+        // Using stable Cobalt API instance
+        const response = await fetch('https://api.cobalt.tools/api/json', {
+            method: 'POST',
             headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-            }
+                'User-Agent': 'Mozilla/5.0'
+            },
+            body: JSON.stringify({
+                url: videoUrl,
+                vQuality: '720',
+                filenamePattern: 'classic'
+            })
         });
 
-        if (response.data && (response.data.status === 'stream' || response.data.status === 'redirect' || response.data.url)) {
-            const downloadUrl = response.data.url || response.data.picker[0].url;
+        const data = await response.json();
+
+        if (data && (data.url || data.picker)) {
+            const downloadUrl = data.url || data.picker[0].url;
             return res.json({
-                status: true,
+                success: true,
                 download_url: downloadUrl
             });
         } else {
-            return res.status(400).json({ status: false, error: "Could not process this YouTube link." });
+            return res.status(400).json({ success: false, error: "Could not fetch video. Try another link!" });
         }
-    } catch (error) {
-        return res.status(500).json({ status: false, error: "Server error or link blocked. Try again." });
+
+    } catch (err) {
+        return res.status(500).json({ success: false, error: "Server error occurred. Please try again." });
     }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});
